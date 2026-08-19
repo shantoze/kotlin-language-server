@@ -21,10 +21,27 @@ class SourceExclusions(
         !scriptsConfig.enabled -> listOf("*.kts")
         !scriptsConfig.buildScriptsEnabled -> listOf("*.gradle.kts")
         else -> emptyList()
-    })
+    } + workspaceRoots.flatMap(::readIgnorePatterns))
 
     private val exclusionMatchers = excludedPatterns
         .map { FileSystems.getDefault().getPathMatcher("glob:$it") }
+
+    /**
+     * Extra patterns from <root>/.kls/ignore, one directory/glob per line.
+     *
+     * Patterns are matched per path segment relative to a workspace root (same
+     * semantics as the hardcoded exclusions above), which avoids Windows
+     * backslash-escaping issues of absolute-path globs.
+     */
+    private fun readIgnorePatterns(root: Path): List<String> =
+        root.resolve(".kls").resolve("ignore").toFile()
+            .takeIf { it.exists() }
+            ?.readLines()
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() && !it.startsWith("#") }
+            ?.map { it.removeSuffix("/") }
+            ?.onEach { LOG.debug("Adding source-exclusion pattern '{}' from {}/.kls/ignore", it, root) }
+            ?: emptyList()
 
     /** Finds all non-excluded files recursively. */
     fun walkIncluded(): Sequence<Path> = workspaceRoots.asSequence().flatMap { root ->
