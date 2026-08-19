@@ -35,3 +35,4 @@ kls_database.db
 
 # smoke build logs (local only)
 build-smoke-*.log
+server.zip

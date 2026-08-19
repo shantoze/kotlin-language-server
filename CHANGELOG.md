@@ -3,6 +3,12 @@ All notable changes to the language server will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.3.15]
+- Upgrade Kotlin to 2.3.20 (compiler, scripting)
+- Fix classpath cache corruption by serializing cache transactions (batchInsert instead of IntEntity.new)
+- Resolve Android unit test dependencies (junit, etc.) via unit test variants
+- Add `.kls/ignore` support for source and classpath exclusions
+
 ## [1.3.13]
 - Bump Kotlin to 2.1.0
 
