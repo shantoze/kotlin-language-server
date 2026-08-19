@@ -50,6 +50,17 @@ allprojects { project ->
                         System.out.println "kotlin-lsp-gradle $it"
                     }
                 }
+
+                // Android unit test dependencies (junit, etc.) live on variant-specific
+                // configurations such as debugUnitTestCompileClasspath, which are not
+                // part of application/library variant compile classpaths.
+                project.configurations.findAll {
+                    it.name.endsWith("UnitTestCompileClasspath")
+                }.each { configuration ->
+                    configuration.files.each {
+                        System.out.println "kotlin-lsp-gradle $it"
+                    }
+                }
             } else if (project.hasProperty('sourceSets')) {
                 // Print the list of all dependencies jar files.
                 sourceSets.forEach {
