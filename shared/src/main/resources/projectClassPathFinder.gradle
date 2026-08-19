@@ -51,14 +51,14 @@ allprojects { project ->
                     }
                 }
 
-                // Android unit test dependencies (junit, etc.) live on variant-specific
-                // configurations such as debugUnitTestCompileClasspath, which are not
-                // part of application/library variant compile classpaths.
-                project.configurations.findAll {
-                    it.name.endsWith("UnitTestCompileClasspath")
-                }.each { configuration ->
-                    configuration.files.each {
-                        System.out.println "kotlin-lsp-gradle $it"
+                // Android unit test dependencies (junit, etc.) live on unit
+                // test variants (e.g. debugUnitTest) whose compile classpaths
+                // are not part of application/library variant compile classpaths.
+                if (project.android.hasProperty('unitTestVariants')) {
+                    project.android.unitTestVariants.each { testVariant ->
+                        testVariant.getCompileClasspath().each {
+                            System.out.println "kotlin-lsp-gradle $it"
+                        }
                     }
                 }
             } else if (project.hasProperty('sourceSets')) {
