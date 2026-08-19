@@ -32,3 +32,6 @@ node_modules
 !.vscode/tasks.json
 *.vsix
 kls_database.db
+
+# smoke build logs (local only)
+build-smoke-*.log

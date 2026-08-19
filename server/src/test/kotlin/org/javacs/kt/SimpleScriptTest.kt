@@ -36,10 +36,12 @@ class SimpleScriptTest {
     @Test
     fun basicScript() {
         val runner = SnippetRunner()
-        var result = runner.eval(CodeSnippet("val x = 1"))
+        // Kotlin 2.3 requires a location to cache compiled scripts; the file extension must
+        // match the template's @KotlinScript(fileExtension = "simpleScript.kts").
+        var result = runner.eval(CodeSnippet("val x = 1", locationId = "test.simpleScript.kts"))
         assertNotError(result)
 
-        result = runner.eval(CodeSnippet("234 + 32"))
+        result = runner.eval(CodeSnippet("234 + 32", locationId = "test.simpleScript.kts"))
         assertNotError(result)
 
         val resultValue = (result as ResultWithDiagnostics.Success).value.returnValue as ResultValue.Value

@@ -1,9 +1,14 @@
+@file:OptIn(ExperimentalCompilerApi::class, K1Deprecation::class)
+@file:Suppress("DEPRECATION", "DEPRECATION_ERROR")
+
 package org.javacs.kt
 
 import org.javacs.kt.util.LoggingMessageCollector
+import org.jetbrains.kotlin.K1Deprecation
 import org.jetbrains.kotlin.cli.jvm.compiler.CliBindingTrace
 import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
+import org.jetbrains.kotlin.compiler.plugin.ExperimentalCompilerApi
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.StandardFileSystems
 import com.intellij.openapi.vfs.VirtualFileManager

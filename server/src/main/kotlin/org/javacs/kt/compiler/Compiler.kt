@@ -1,5 +1,5 @@
-@file:OptIn(ExperimentalCompilerApi::class)
-@file:Suppress("DEPRECATION")
+@file:OptIn(ExperimentalCompilerApi::class, K1Deprecation::class)
+@file:Suppress("DEPRECATION", "DEPRECATION_ERROR")
 
 package org.javacs.kt.compiler
 
@@ -8,6 +8,7 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.StandardFileSystems
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.VirtualFileSystem
+import org.jetbrains.kotlin.K1Deprecation
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiFileFactory
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
@@ -34,10 +35,9 @@ import org.jetbrains.kotlin.scripting.compiler.plugin.definitions.CliScriptDefin
 import org.jetbrains.kotlin.scripting.configuration.ScriptingConfigurationKeys
 import org.jetbrains.kotlin.scripting.definitions.ScriptDefinitionProvider
 import org.jetbrains.kotlin.scripting.definitions.ScriptDefinition
-import org.jetbrains.kotlin.scripting.definitions.KotlinScriptDefinition // Legacy
+import org.jetbrains.kotlin.scripting.definitions.annotationsForSamWithReceivers
 import org.jetbrains.kotlin.scripting.definitions.findScriptDefinition
 import org.jetbrains.kotlin.scripting.definitions.getEnvironment
-import org.jetbrains.kotlin.scripting.resolve.KotlinScriptDefinitionFromAnnotatedTemplate
 import org.jetbrains.kotlin.types.TypeUtils
 import org.jetbrains.kotlin.types.expressions.ExpressionTypingServices
 import org.jetbrains.kotlin.util.KotlinFrontEndException
@@ -47,11 +47,13 @@ import java.nio.file.Paths
 import java.net.URLClassLoader
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
-import kotlin.script.dependencies.Environment
-import kotlin.script.dependencies.ScriptContents
-import kotlin.script.experimental.dependencies.ScriptDependencies
-import kotlin.script.experimental.dependencies.DependenciesResolver
-import kotlin.script.experimental.dependencies.DependenciesResolver.ResolveResult
+import kotlin.script.experimental.api.KotlinType
+import kotlin.script.experimental.api.ScriptCompilationConfiguration
+import kotlin.script.experimental.api.SourceCode
+import kotlin.script.experimental.api.baseClass
+import kotlin.script.experimental.api.defaultImports
+import kotlin.script.experimental.api.displayName
+import kotlin.script.experimental.api.fileExtension
 import kotlin.script.experimental.host.ScriptingHostConfiguration
 import kotlin.script.experimental.host.configurationDependencies
 import kotlin.script.experimental.jvm.defaultJvmScriptingHostConfiguration
@@ -62,10 +64,6 @@ import org.javacs.kt.CompilerConfiguration
 import org.javacs.kt.ScriptsConfiguration
 import org.javacs.kt.util.KotlinLSException
 import org.javacs.kt.util.LoggingMessageCollector
-import org.jetbrains.kotlin.cli.common.output.writeAllTo
-import org.jetbrains.kotlin.codegen.ClassBuilderFactories
-import org.jetbrains.kotlin.codegen.KotlinCodegenFacade
-import org.jetbrains.kotlin.codegen.state.GenerationState
 import org.jetbrains.kotlin.container.getService
 import org.jetbrains.kotlin.descriptors.ModuleDescriptor
 import org.jetbrains.kotlin.cli.jvm.compiler.CliBindingTrace
@@ -151,27 +149,18 @@ private class CompilationEnvironment(
                             val scriptHostConfig = ScriptingHostConfiguration(defaultJvmScriptingHostConfiguration) {
                                 configurationDependencies(JvmDependency(fileClassPath))
                             }
-                            // TODO: KotlinScriptDefinition will soon be deprecated, use
-                            //       ScriptDefinition.compilationConfiguration and its defaultImports instead
-                            //       of KotlinScriptDefinition.dependencyResolver
-                            // TODO: Use ScriptDefinition.FromLegacyTemplate directly if possible
-                            // scriptDefinitions = scriptTemplates.map { ScriptDefinition.FromLegacyTemplate(scriptHostConfig, scriptClassLoader.loadClass(it).kotlin) }
-                            scriptDefinitions.addAll(scriptTemplates.map { ScriptDefinition.FromLegacy(scriptHostConfig, object : KotlinScriptDefinitionFromAnnotatedTemplate(
-                                scriptClassLoader.loadClass(it).kotlin,
-                                scriptHostConfig[ScriptingHostConfiguration.getEnvironment]?.invoke()
-                            ) {
-                                override fun isScript(fileName: String): Boolean {
-                                    // The pattern for KotlinSettingsScript doesn't seem to work well, so kinda "forcing it" for settings.gradle.kts files
-                                    if (this.template.simpleName == "KotlinSettingsScript" && fileName.endsWith("settings.gradle.kts")) {
-                                        return true
-                                    }
-
-                                    return super.isScript(fileName)
-                                }
-
-                                override val dependencyResolver: DependenciesResolver = object : DependenciesResolver {
-                                    override fun resolve(scriptContents: ScriptContents, environment: Environment) = ResolveResult.Success(ScriptDependencies(
-                                        imports = listOf(
+                            // Script definitions are built from the annotated Gradle templates via
+                            // ScriptDefinition.FromConfigurations (Kotlin 2.3 migration,
+                            // replacing the deprecated FromLegacy/KotlinScriptDefinitionFromAnnotatedTemplate path).
+                            scriptDefinitions.addAll(scriptTemplates.map { templateName ->
+                                val templateClass = scriptClassLoader.loadClass(templateName).kotlin
+                                object : ScriptDefinition.FromConfigurations(
+                                    scriptHostConfig,
+                                    ScriptCompilationConfiguration {
+                                        baseClass(KotlinType(templateClass))
+                                        fileExtension("gradle.kts")
+                                        displayName(templateClass.simpleName ?: templateName)
+                                        defaultImports(listOf(
                                             "org.gradle.kotlin.dsl.*",
                                             "org.gradle.kotlin.dsl.plugins.dsl.*",
                                             "org.gradle.*",
@@ -389,17 +378,27 @@ private class CompilationEnvironment(
                                             "org.gradle.vcs.git.*",
                                             "org.gradle.work.*",
                                             "org.gradle.workers.*"
-                                        )
-                                    ))
+                                        ))
+                                    },
+                                    null
+                                ) {
+                                    override fun isScript(script: SourceCode): Boolean {
+                                        // The pattern for KotlinSettingsScript doesn't seem to work well, so kinda "forcing it" for settings.gradle.kts files
+                                        if (templateClass.simpleName == "KotlinSettingsScript" && script.locationId?.endsWith("settings.gradle.kts") == true) {
+                                            return true
+                                        }
+
+                                        return super.isScript(script)
+                                    }
                                 }
-                            }) })
+                            })
                         } catch (e: Exception) {
                             LOG.error("Error while loading script template classes")
                             LOG.printStackTrace(e)
                         }
                     }
 
-                    LOG.info("Adding script definitions ${scriptDefinitions.map { it.asLegacyOrNull<KotlinScriptDefinition>()?.template?.simpleName }}")
+                    LOG.info("Adding script definitions ${scriptDefinitions.map { it.name }}")
                     addAll(ScriptingConfigurationKeys.SCRIPT_DEFINITIONS, scriptDefinitions)
                 }
             },
@@ -409,7 +408,11 @@ private class CompilationEnvironment(
         // hacky way to support SamWithReceiverAnnotations for scripts
         val scriptDefinitions: List<ScriptDefinition> = environment.configuration.getList(ScriptingConfigurationKeys.SCRIPT_DEFINITIONS)
         scriptDefinitions.takeIf { it.isNotEmpty() }?.let {
-            val annotations = scriptDefinitions.flatMap { it.asLegacyOrNull<KotlinScriptDefinition>()?.annotationsForSamWithReceivers ?: emptyList() }
+            val annotations = scriptDefinitions.flatMap {
+                it.compilationConfiguration?.let { config ->
+                    config[ScriptCompilationConfiguration.annotationsForSamWithReceivers].orEmpty().map { it.typeName }
+                } ?: emptyList()
+            }
             StorageComponentContainerContributor.registerExtension(environment.project, CliSamWithReceiverComponentContributor(annotations))
         }
         val project = environment.project
@@ -540,8 +543,8 @@ class Compiler(
 
     fun compileKtFiles(files: Collection<KtFile>, sourcePath: Collection<KtFile>, kind: CompilationKind = CompilationKind.DEFAULT): Pair<BindingContext, ModuleDescriptor> {
         if (kind == CompilationKind.BUILD_SCRIPT) {
-            // Print the (legacy) script template used by the compiled Kotlin DSL build file
-            files.forEach { LOG.debug { "$it -> ScriptDefinition: ${it.findScriptDefinition()?.asLegacyOrNull<KotlinScriptDefinition>()?.template?.simpleName}" } }
+            // Print the script template used by the compiled Kotlin DSL build file
+            files.forEach { LOG.debug { "$it -> ScriptDefinition: ${it.findScriptDefinition()?.name}" } }
         }
 
         compileLock.withLock {
@@ -590,21 +593,21 @@ class Compiler(
         }
     }
 
+    /**
+     * Generates .class files for the given module into [outputDirectory].
+     *
+     * Kotlin 2.3 removed the K1 codegen facade this used to rely on
+     * (KotlinCodegenFacade / GenerationState.Builder). Reimplementing against the K2
+     * JVM backend (org.jetbrains.kotlin.backend.jvm) is tracked as follow-up work once the
+     * 2.3 migration main line is green; see dev-docs/101 risk 6 (user decision: option B).
+     * The module/bindingContext parameters are retained for the future K2 backend reimplementation.
+     */
+    @Suppress("UnusedPrivateMember")
     fun generateCode(module: ModuleDescriptor, bindingContext: BindingContext, files: Collection<KtFile>) {
         outputDirectory.takeIf { codegenConfig.enabled }?.let {
-            compileLock.withLock {
-                val compileEnv = compileEnvironmentFor(CompilationKind.DEFAULT)
-                val state = GenerationState.Builder(
-                    project = compileEnv.environment.project,
-                    builderFactory = ClassBuilderFactories.BINARIES,
-                    module = module,
-                    bindingContext = bindingContext,
-                    files = files.toList(),
-                    configuration = compileEnv.environment.configuration
-                ).build()
-                KotlinCodegenFacade.compileCorrectFiles(state)
-                state.factory.writeAllTo(it)
-            }
+            // TODO(2.3-migration): codegen disabled. K2 JVM backend equivalent of
+            //  KotlinCodegenFacade.compileCorrectFiles is not yet wired up (see 101 risk 6).
+            LOG.warn("Code generation is not available in this build (Kotlin 2.3 codegen API removed); skipping .class output for ${files.size} file(s)")
         }
     }
 

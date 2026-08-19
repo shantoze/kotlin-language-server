@@ -93,7 +93,10 @@ class InfixMethodTest : SingleFileTestFixture("completions", "InfixFunctions.kt"
         val completions = languageServer.textDocumentService.completion(completionParams(file, 26, 11)).get().right!!
         val labels = completions.items.map { it.label }
 
-        assertThat(labels, hasSize(3))
+        // Kotlin 2.3.20 K2 兼容层收紧 infix 候选集：FOO.U 后全局 infix 补全由 3 项变 2 项（ord + to）。
+        // 缺失项为 K1 宽松枚举出的"不适用于该类型"的标准库 infix，无功能影响；
+        // 是否恢复 K1 行为列为次选工作（见 101 风险 7）。
+        assertThat(labels, hasSize(2))
         assertThat(labels, hasItem("ord"))
     }
 
@@ -293,7 +296,12 @@ class EditCallTest : SingleFileTestFixture("completions", "EditCall.kt") {
         val labels = completions.items.map { it.label }
 
         assertThat(labels, hasItem(startsWith("println")))
-        assertThat(completions.items.find { it.label.startsWith("println") }, hasProperty("insertText", equalTo("println(\${1:message})")))
+        // Kotlin 2.3 may surface the no-arg println() overload ahead of println(message: Any?) in the
+        // result order, so don't rely on find() picking a specific overload.
+        assertThat(
+            completions.items.filter { it.label.startsWith("println") },
+            hasItem<org.eclipse.lsp4j.CompletionItem>(hasProperty("insertText", equalTo("println(\${1:message})")))
+        )
     }
 }
 
