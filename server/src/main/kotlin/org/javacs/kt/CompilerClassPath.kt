@@ -57,12 +57,20 @@ class CompilerClassPath(
 
         if (updateClassPath) {
             val newClassPath = resolver.classpathOrEmpty
+            val resolverAndroid = newClassPath.map { it.compiledJar.toString() }.filter { it.contains("android.jar") }
+            LOG.info("[KLS-DEBUG] resolver.classpathOrEmpty returned {} entries, {} android.jar", newClassPath.size, resolverAndroid.size)
             if (newClassPath != classPath) {
+                LOG.info("[KLS-DEBUG] newClassPath({}) != classPath({}), syncing", newClassPath.size, classPath.size)
                 synchronized(classPath) {
                     syncPaths(classPath, newClassPath, "class path") { it.compiledJar }
                 }
                 refreshCompiler = true
+            } else {
+                LOG.info("[KLS-DEBUG] newClassPath == classPath ({} entries), skipping sync", classPath.size)
             }
+            LOG.info("[KLS-DEBUG] after sync, classPath has {} entries", classPath.size)
+            val androidJars = classPath.map { it.compiledJar.toString() }.filter { it.contains("android.jar") || it.contains("android-") }
+            LOG.info("[KLS-DEBUG] Classpath contains {} android-related entries: {}", androidJars.size, androidJars)
 
             async.compute {
                 val newClassPathWithSources = resolver.classpathWithSources

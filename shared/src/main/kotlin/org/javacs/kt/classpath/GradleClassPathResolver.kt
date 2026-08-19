@@ -18,9 +18,12 @@ internal class GradleClassPathResolver(private val path: Path, private val inclu
         val scripts = listOf("projectClassPathFinder.gradle")
         val tasks = listOf("kotlinLSPProjectDeps")
 
-        return readDependenciesViaGradleCLI(projectDirectory, scripts, tasks)
+        val result = readDependenciesViaGradleCLI(projectDirectory, scripts, tasks)
             .apply { if (isNotEmpty()) LOG.info("Successfully resolved dependencies for '${projectDirectory.fileName}' using Gradle") }
             .map { ClassPathEntry(it, null) }.toSet()
+        val androidJars = result.map { it.compiledJar.toString() }.filter { it.contains("android.jar") }
+        LOG.info("[KLS-DEBUG] Gradle returned {} entries for '{}', {} android.jar: {}", result.size, projectDirectory.fileName, androidJars.size, androidJars)
+        return result
     }
     override val buildScriptClasspath: Set<Path> get() {
         return if (includeKotlinDSL) {
