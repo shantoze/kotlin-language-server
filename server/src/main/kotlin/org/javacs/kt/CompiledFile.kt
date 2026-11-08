@@ -47,8 +47,16 @@ class CompiledFile(
     fun typeOfExpression(expression: KtExpression, scopeWithImports: LexicalScope): KotlinType? =
             bindingContextOf(expression, scopeWithImports)?.getType(expression)
 
-    fun bindingContextOf(expression: KtExpression, scopeWithImports: LexicalScope): BindingContext? =
-            classPath.compiler.compileKtExpression(expression, scopeWithImports, sourcePath, kind)?.first
+    fun bindingContextOf(expression: KtExpression, scopeWithImports: LexicalScope): BindingContext? {
+        /*  android
+        * Analyzing a KtClassOrObject as a local expression makes the compiler throw
+        * "UnsupportedOperationException: Should not be called" (NoTopLevelDescriptorProvider).
+        * This happens when the cursor is at class-body level, e.g. completion or document
+        *  highlight between members. Return null instead so callers fall back gracefully.
+        */
+        if (expression is KtClassOrObject) return null
+        return classPath.compiler.compileKtExpression(expression, scopeWithImports, sourcePath, kind)?.first
+    }
 
     private fun expandForType(cursor: Int, surroundingExpr: KtExpression): KtExpression {
         val dotParent = surroundingExpr.parent as? KtDotQualifiedExpression
