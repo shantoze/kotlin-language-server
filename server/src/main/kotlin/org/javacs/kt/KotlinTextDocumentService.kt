@@ -51,6 +51,16 @@ class KotlinTextDocumentService(
     val lintTodo = mutableSetOf<URI>()
     var lintCount = 0
 
+    /**
+     * [TULIS] Dulu lintAll() (dipanggil di akhir initialize) meng-compile SEMUA berkas workspace satu per satu.
+     * Di proyek besar itu memakan menit-menit sambil memegang kunci kompilator, sehingga diagnostik, hover dan
+     * completion berkas yang sedang dibuka antre di belakangnya. Sekarang dimatikan secara default; indeks dependensi
+     * (saran import dari pustaka) dibangun sekali setelah berkas pertama selesai di-compile.
+     * Kembali ke perilaku lama dengan opsi JVM: -Dkls.compileAllOnInit=true
+     */
+    private val compileAllOnInit = System.getProperty("kls.compileAllOnInit") == "true"
+    @Volatile private var dependencyIndexPending = false
+
     var lintRecompilationCallback: () -> Unit
         get() = sp.beforeCompileCallback
         set(callback) { sp.beforeCompileCallback = callback }
@@ -276,6 +286,11 @@ class KotlinTextDocumentService(
     }
 
     fun lintAll() {
+        if (!compileAllOnInit) {
+            LOG.info("lintAll: compile semua berkas dilewati (kls.compileAllOnInit=false); indeks dependensi menunggu berkas pertama")
+            dependencyIndexPending = true
+            return
+        }
         debounceLint.submitImmediately {
             sp.compileAllFiles()
             sp.saveAllFiles()
@@ -305,6 +320,11 @@ class KotlinTextDocumentService(
         val context = sp.compileFiles(files)
         if (!cancelCallback.invoke()) {
             reportDiagnostics(files, context.diagnostics)
+        }
+        // [TULIS] Indeks dependensi dibangun sekali, begitu sudah ada satu berkas yang ter-compile (butuh modulnya).
+        if (dependencyIndexPending) {
+            dependencyIndexPending = false
+            if (!sp.refreshDependencyIndexesIfPossible()) dependencyIndexPending = true
         }
         lintCount++
     }
