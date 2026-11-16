@@ -299,6 +299,16 @@ class SourcePath(
     }
 
     /**
+     * [TULIS] Versi ringan refreshDependencyIndexes(): TIDAK meng-compile semua berkas. Memakai modul dari berkas mana pun
+     * yang sudah ter-compile. Mengembalikan false bila belum ada satu pun berkas ter-compile (coba lagi nanti).
+     */
+    fun refreshDependencyIndexesIfPossible(): Boolean {
+        val module = files.values.firstOrNull { it.module != null }?.module ?: return false
+        refreshDependencyIndexes(module)
+        return true
+    }
+
+    /**
      * Refreshes the indexes. If already done, refreshes only the declarations in the files that were changed.
      */
     private fun refreshWorkspaceIndexes(oldFiles: List<SourceFile>, newFiles: List<SourceFile>) = indexAsync.execute {
