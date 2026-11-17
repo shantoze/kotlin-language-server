@@ -178,7 +178,10 @@ class KotlinWorkspaceService(
             get("indexing")?.asJsonObject?.apply {
                 val indexing = config.indexing
                 get("enabled")?.asBoolean?.let {
+                    val wasEnabled = indexing.enabled
                     indexing.enabled = it
+                    // [TULIS] Dinyalakan setelah server berjalan: indeks dependensi belum pernah dibangun, bangun sekarang.
+                    if (it && !wasEnabled) docService.requestDependencyIndex()
                 }
             }
 
