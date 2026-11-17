@@ -282,7 +282,25 @@ class KotlinTextDocumentService(
     }
 
     public fun updateDebouncer() {
+        // [TULIS] Debouncer lama dihentikan (tugas yang sudah terjadwal tetap dijalankan) supaya tiap perubahan
+        // pengaturan tidak menyisakan satu thread baru.
+        val old = debounceLint
         debounceLint = Debouncer(Duration.ofMillis(config.diagnostics.debounceTime))
+        old.shutdown(false)
+    }
+
+    /**
+     * [TULIS] Dipanggil saat indexing.enabled dinyalakan lewat pengaturan: bangun indeks dependensi sekarang
+     * (bila belum ada berkas ter-compile, ditunda sampai berkas pertama selesai di-compile).
+     */
+    fun requestDependencyIndex() {
+        dependencyIndexPending = true
+        debounceLint.submitImmediately {
+            if (dependencyIndexPending) {
+                dependencyIndexPending = false
+                if (!sp.refreshDependencyIndexesIfPossible()) dependencyIndexPending = true
+            }
+        }
     }
 
     fun lintAll() {
