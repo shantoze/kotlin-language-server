@@ -1,7 +1,12 @@
-name: Build server zip
+name: Build server zip for TULIS
 
 on:
   workflow_dispatch:
+    inputs:
+      full:
+        description: 'Also upload the full distribution'
+        type: boolean
+        default: false
 
 jobs:
   dist:
@@ -15,7 +20,19 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Build distribution
         run: ./gradlew :server:distZip -PjavaVersion=21
+      - name: Extract core jars
+        run: |
+          mkdir -p unz core
+          unzip -q server/build/distributions/*.zip -d unz
+          find unz -path '*/lib/*' \( -name 'server*.jar' -o -name 'shared*.jar' \) -exec cp -v {} core/ \;
+          ls -la core
+          test -n "$(ls -A core)"
       - uses: actions/upload-artifact@v4
+        with:
+          name: kls-core
+          path: core/*.jar
+      - uses: actions/upload-artifact@v4
+        if: ${{ inputs.full }}
         with:
           name: kotlin-language-server
           path: server/build/distributions/*.zip
