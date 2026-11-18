@@ -16,13 +16,17 @@ class KtfmtFormatter(private val config: KtfmtConfiguration) : Formatter {
             "dropbox" -> KtfmtOptions.Style.DROPBOX
             else -> KtfmtOptions.Style.GOOGLE
         }
-        return Ktfmt.format(KtfmtOptions(
-            style = style,
-            maxWidth = config.maxWidth,
-            blockIndent = options.tabSize.takeUnless { it == 0 } ?: config.indent,
-            continuationIndent = config.continuationIndent,
-            removeUnusedImports = config.removeUnusedImports,
-        ), code)
+        return try {
+            Ktfmt.format(KtfmtOptions(
+                style = style,
+                maxWidth = config.maxWidth,
+                blockIndent = options.tabSize.takeUnless { it == 0 } ?: config.indent,
+                continuationIndent = config.continuationIndent,
+                removeUnusedImports = config.removeUnusedImports,
+            ), code)
+        } catch (e: Exception) {
+            System.err.println("[TULIS] ktfmt skipped: ${e.javaClass.simpleName}: ${e.message?.take(120)}")
+            code
+        }
     }
 }
-
