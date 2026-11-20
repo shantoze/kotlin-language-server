@@ -52,7 +52,7 @@ public data class IndexingConfiguration(
 
 public data class ExternalSourcesConfiguration(
     /** Whether kls-URIs should be sent to the client to describe classes in JARs. */
-    var useKlsScheme: Boolean = false,
+    var useKlsScheme: Boolean = true,
     /** Whether external classes should be automatically converted to Kotlin. */
     var autoConvertToKotlin: Boolean = false
 )
